@@ -1,0 +1,46 @@
+general:
+
+    compile with debug information (gcc -g -fno-inline)
+
+    valgrind [valgrind-options] program [program-options]
+
+    options:
+        --tool= (default: memcheck)
+        --read-inline-info=yes|no
+        --read-var-info=yes|no
+        --log-file=
+
+        --default-suppressions=yes|no (default: yes)
+        --suppressions=<path>
+        --gen-suppressions=yes|no|all
+
+
+memcheck:       memory error detector
+
+    compile with no or little optimization (-O)
+
+    detects:
+    -   illegal accesses
+    -   uses of uninitialized values
+    -   double/mismatched free()
+    -   memory leaks (explain start vs. interior pointers and directly/indirectly/possibly lost)
+
+    options:
+        --redzone-size=<bytes>
+        --leak-check=yes|summary|no (default: summary)
+        --leak-check-heuristics=none|all|(stdstring,length64,newarray,multipleinheritance)
+        --track-origins=yes|no (default: no)    -- for uninitialized values
+        --keep-stacktraces=alloc|free|alloc-then-free|alloc-and-free|none (default: alloc-then-free)
+        --freelist-vol=<bytes>
+
+
+exp-dhat:       (experimantal) dynamic heap analysis
+
+    options:
+        --show-top-n=<count>
+        --sort-by=max-bytes-live|tot-bytes-allocd|max-blocks-live
+        --num-callers=<count>   (# of stack frames to distinguish allocation points, set to 4?)
+
+
+exp-sgcheck:    (experimental) buffer overrun checker
+

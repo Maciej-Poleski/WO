@@ -1,0 +1,67 @@
+gdb --ags ./prog arg1 arg2 < skrypt_dla_gdb
+gdb -q // wycisza disclaimer
+    --symbols <symbola do debugowania>
+    --directory <główny katalog do źródeł>
+    --pid <id procesu do którego chcemy się podpiąć> ./prog (plik do którego się podpinamy)
+    --tui (podświetla obecną linijke)
+
+polecenia wewnątrz gdb:
+run [args] <input >output - uruchamia pod nadzorem gdb
+start - jak run, ale próbuje zatrzymać na początku funkcji main
+list - fragment kodu
+(n)ext
+[enter] powtarza ostatnią instrukcje
+(p)rint <wyrażenie>
+explore <wyrażenie>
+display <wyrażenie> - dodaje do zbioru automatycznie wypisywanych wyrażeń
+disable display #nr
+enable display #nr - włączy z powrotem
+delete - usuwa
+call <wyrażenie> - jak print, ale nie wypisuje wyniku
+set (var) i=6 - jak call, ale tylko do zmiennych
+until 12 - wykonuje program aż do lini 12 lub do wyjścia z obecnie wykonywanej funkcji
+(s)tep - wchodzi do funkcji
+skip <pełna nazwa funkcji>
+info skip(S) - 
+(b)reak (linia, nazwa pliku i linia, jeżeli jest wiele takich, to ustawi do wszystkich)
+set multpile-symbols ask (zapyta o którą chodzi)
+tbreak - jednorazowy
+b <miejsce> if <wyrażenie> - break point warunkowy
+commands #nr
+...
+...
+end
+^^^ wykonuje polecenia w miejscu #nr
+info break
+enable/disable break
+ignore #nr <ile razy> - ignoruje break point x razy
+watch <wyrażenie> - zatrzyma gdy się zmieni
+watch <adres>
+(c)ontinue - uruchamia aż do zatrzymania (sygnał, break point, watch point, ...)
+backtrace (bt) - stos
+backtrace full - wartości wszystkich zmiennych lokalnych
+up/down
+frame # (nie przenosi sterowania)
+finish - wychodzi z funkcji (podaje wynik) (najgłębszej)
+return - zwraca wynik zamiast ewaluacji funkcji (z obecnej ramki stosu (frame))
+return (bool)false
+until - wychodzi z funkcji na którą obecnie patrzymy
+checkpoint - 
+restart #nr checkpointu
+info checkpoints
+record - zapisuje (do późniejszego cofania)
+reverse-next
+reverse-step
+reverse-continue
+watch pointer
+reverse-continue
+record save/restore <nazwa_pliku>
+record goto ...
+record stop - zatrzymuje zapisywanie
+record delete
+set logging on/off
+set logging file <plik>
+shell <polecenie>
+
+Jak wypisawać STL (wtyczki pretty printing):
+.gdbinit

@@ -1,0 +1,6 @@
+{
+   fwrite_suppression
+   Memcheck:Cond
+   ...
+   fun:fwrite
+}

@@ -1,4 +1,5 @@
 #include <vector>
+#include <cstdlib>
 using namespace std;
 
 inline void zero(int & x)
@@ -8,8 +9,10 @@ inline void zero(int & x)
 
 int main()
 {
-    vector<int> t(100);
-    for (int i=0; i<=100; ++i)
+    int *t=new int[100];
+    for (int i; i<=100; ++i)
         zero(t[i]);
+    
+    zero(t[108]);
     return 0;
 }

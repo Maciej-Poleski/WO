@@ -35,7 +35,7 @@ int main()
     r->l = m;
     m->l = l;
     l = nullptr;
-    m = nullptr;
+//     m = nullptr;
     r = nullptr;
     return 0;
 }
