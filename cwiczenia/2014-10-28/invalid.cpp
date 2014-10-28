@@ -6,44 +6,43 @@
 using namespace std;
 
 const int MAXV = 100000;
-const int MAXE = 1000000;
-const int INFTY = MAXV;
+//const int MAXE = 1000000;
+const int INFTY = MAXV+5;
 
-int color[MAXV];
-int number[MAXV];
+int *number;
 int nextnumber;
-int low[MAXV];
-int dist[MAXV];
-vector<int> edges[MAXV];
+int *low;
+int *dist;
+vector<int> *edges;
 int answer;
 
-void clear(vector<int>& v)
+template<class T>
+void clear(T& v)
 {
-    vector<int> w;
-    v.swap(w);
+    T w;
+    swap(v,w);
 }
 
 void dfs(const int v, const int t)
 {
-    assert(color[v]==0);
-    color[v] = 1;
     low[v] = number[v] = nextnumber++;
     for (int i = 0; i < edges[v].size(); ++i)
     {
         int w = edges[v][i];
         if(w==t)
             continue;
-        if (color[w] == 0)
+        if (number[w]==-1)
         {
             dfs(w, v);
             if (low[w] < low[v])
                 low[v] = low[w];
+            
+            if((t!=-1) && (low[w] >= number[v]))
+                answer = max(answer, dist[v]);
         }
         else if (number[w] < low[v])
             low[v] = number[w];
     }
-    if ((low[v] < number[v]) || ((t==MAXV) && (edges[v].size()>1)))
-       answer = max(answer, dist[v]);
 }
 
 int main()
@@ -52,22 +51,21 @@ int main()
     for (scanf("%d", &Z); Z; --Z)
     {
         scanf("%d%d%d", &V, &E, &S);
-        for (int v=0; v<V; ++v) // Indeksacja przesunięta o jeden
-        {
-            color[v] = 0;
-            clear(edges[v]);
-        }
         nextnumber=0;
         answer=0;
+        edges=new vector<int>[V];
         for (int e=0; e<E; ++e)
         {
             int v, w;
             scanf("%d%d", &v, &w);
+//             if(v>V || w>V)
+//                 continue;
             edges[v-1].push_back(w-1);
             edges[w-1].push_back(v-1);
         }
         queue<int> Q;
-        for (int v=0; v<MAXV; ++v)
+        dist=new int[V];
+        for (int v=0; v<V; ++v)
             dist[v] = INFTY;    // Wystarczy?
         dist[S-1] = 0;
         Q.push(S-1);
@@ -84,8 +82,19 @@ int main()
                 }
             }
         }
+        clear(Q);
         //dfs(S, 0);      // Poza zakresem (na odwrót?)
-        dfs(0,MAXV);
+        number=new int[V];
+        for (int v=0; v<V; ++v)
+        {
+            number[v] = -1;
+        }
+        low=new int[V];
+        dfs(S-1,-1);
+        delete [] edges;
+        delete [] dist;
+        delete [] number;
+        delete [] low;
         printf("%d\n", answer);
     }
     return 0;
