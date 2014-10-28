@@ -1,0 +1,8 @@
+min dane
+max dane
+czyszczenie po starych zestawach (błędy semantyczne, wycieki pamięci)
+long long-i
+wyróżnione wartości na krańcach przedziału (indeksowanie -1, out-of-bounds)
+wyprodukować wszystkie małe testy
+losowe (małe, duże)
+szczególne (np. brak punktów artykulacji, korzeń)
