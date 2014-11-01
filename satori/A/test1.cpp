@@ -34,10 +34,10 @@ class Graph
 	std::vector<int> edges;
     };
 
+public:
     using VertexRange = std::pair<int,int>;
     using VertexGenerator = std::function<VertexRange()>;
 
-public:
     Graph() {}
 
     void serialize();
@@ -96,7 +96,7 @@ public:
      * @return korzeń i przedział wszystkich stworzonych identyfikatorów (rootInt,fullInt)
      */
     template<class Generator>
-    std::pair<VertexRange,VertexRange> generateTree(Generator& engine, VertexGenerator vgen, std::size_t vertices, const std::function<std::size_t()> chldCountGenerator, const std::function<bool()> deathGenerator);
+    std::size_t generateTree(Generator& engine, VertexGenerator vgen, std::size_t vertices, const std::function<std::size_t()> chldCountGenerator, const std::function<bool()> deathGenerator);
 
 private:
     std::vector<Vertex> G;
@@ -200,14 +200,12 @@ std::pair<Graph::VertexRange,Graph::VertexRange> Graph::generateVeryWideTree(Gen
 }
 
 template<class Generator>
-std::pair<Graph::VertexRange,Graph::VertexRange>
+std::size_t
 Graph::generateTree(Generator& engine, const VertexGenerator vgen, const std::size_t vertices, const std::function<std::size_t()> chldCountGenerator, const std::function<bool()> deathGenerator)
 {
     assert(vertices>0);
-    const auto root=vgen();
-    auto end=root.second;
     std::queue<VertexRange> queue;
-    queue.push(root);
+    queue.push(vgen());
     auto verticesLeft=vertices-1;
     while(!queue.empty() && verticesLeft>0)
     {
@@ -220,12 +218,11 @@ Graph::generateTree(Generator& engine, const VertexGenerator vgen, const std::si
 	{
 	    auto chld=vgen();
 	    verticesLeft-=1;
-	    end=chld.second;
 	    makeEdge(engine,vDist(engine),chld);
 	    queue.push(chld);
 	}
     }
-    return std::make_pair(root,std::make_pair(root.first,end));
+    return vertices-verticesLeft;
 }
 
 template<class Generator>
@@ -290,46 +287,67 @@ std::vector<std::function<void()>> prepareTests(Generator& engine)
 		tests.push_back([&engine,vc,ec]{ generateRandomEdges(engine,vc,ec); });
 	}
 
-    std::vector<std::function<void(Graph&)>> generators={
-	[&engine] (Graph& g) {
-	    g.generatePath(engine,std::bind(&Graph::newVertex,&g),maxN);
-	},
-	[&engine] (Graph& g) {
-	    g.generateStar(engine,std::bind(&Graph::newVertex,&g),maxN);
-	},
-	[&engine] (Graph& g) {
-	    g.generateVeryWideTree(engine,std::bind(&Graph::newVertex,&g),maxN);
-	},
-	[&engine] (Graph& g) {
-	    auto sizeLeft=maxN;
-	    while(sizeLeft>0)
-	    {
-		const auto I=g.generateTree(engine,std::bind(&Graph::newVertex,&g),sizeLeft,makePoissonChildrenCountGenerator(engine,3.5),makeBernoulliDistributionGenerator(engine,0.33));
-		sizeLeft-=1+I.second.second-I.second.first;
-// 		std::cerr<<sizeLeft<<'\n';
-	    }
-	},
-	[&engine] (Graph& g) {
-	    auto sizeLeft=maxN;
-	    while(sizeLeft>0)
-	    {
-		const auto I=g.generateTree(engine,std::bind(&Graph::newVertex,&g),sizeLeft,makePoissonChildrenCountGenerator(engine,100),makeBernoulliDistributionGenerator(engine,0.1));
-		sizeLeft-=1+I.second.second-I.second.first;
-// 		std::cerr<<sizeLeft<<'\n';
-	    }
-	},
-	[&engine] (Graph& g) {
-	    auto sizeLeft=maxN;
-	    while(sizeLeft>0)
-	    {
-		const auto I=g.generateTree(engine,std::bind(&Graph::newVertex,&g),sizeLeft,makeGeometricChildrenCountGenerator(engine,0.85),makeBernoulliDistributionGenerator(engine,0.05));
-		sizeLeft-=1+I.second.second-I.second.first;
-// 		std::cerr<<sizeLeft<<'\n';
-	    }
-	},
-    };
+    for(std::size_t n=1;n<=maxN;n*=10)
+    {
+	std::vector<std::function<Graph::VertexGenerator(Graph&)>> vertexFactories;
 
-    std::transform(generators.begin(),generators.end(),std::back_inserter(tests),buildGraphAndSerialize);
+	if(n!=1 && n!=maxN)
+	{
+	    vertexFactories={
+
+	    };
+	}
+	else if(n==1)
+	{
+
+	}
+	else if(n==maxN)
+	{
+	    vertexFactories={ [](Graph& g) {
+		return std::bind(&Graph::newVertex,&g);
+	    }};
+	}
+
+	for(const auto vertexFactory : vertexFactories)
+	{
+	    std::vector<std::function<void(Graph&)>> generators={
+		[&engine,vertexFactory,n] (Graph& g) {
+		    g.generatePath(engine,vertexFactory(g),n);
+		},
+		[&engine,vertexFactory,n] (Graph& g) {
+		    g.generateStar(engine,vertexFactory(g),n);
+		},
+		[&engine,vertexFactory,n] (Graph& g) {
+		    g.generateVeryWideTree(engine,vertexFactory(g),n);
+		},
+		[&engine,vertexFactory,n] (Graph& g) {
+		    auto sizeLeft=n;
+		    while(sizeLeft>0)
+		    {
+			const auto I=g.generateTree(engine,vertexFactory(g),sizeLeft,makePoissonChildrenCountGenerator(engine,3.5),makeBernoulliDistributionGenerator(engine,0.33));
+			sizeLeft-=I;
+		    }
+		},
+		[&engine,vertexFactory,n] (Graph& g) {
+		    auto sizeLeft=n;
+		    while(sizeLeft>0)
+		    {
+			const auto I=g.generateTree(engine,vertexFactory(g),sizeLeft,makePoissonChildrenCountGenerator(engine,100),makeBernoulliDistributionGenerator(engine,0.1));
+			sizeLeft-=I;
+		    }
+		},
+		[&engine,vertexFactory,n] (Graph& g) {
+		    auto sizeLeft=n;
+		    while(sizeLeft>0)
+		    {
+			const auto I=g.generateTree(engine,vertexFactory(g),sizeLeft,makeGeometricChildrenCountGenerator(engine,0.85),makeBernoulliDistributionGenerator(engine,0.05));
+			sizeLeft-=I;
+		    }
+		},
+	    };
+	    std::transform(generators.begin(),generators.end(),std::back_inserter(tests),buildGraphAndSerialize);
+	}
+    }
 
     return tests;
 }
