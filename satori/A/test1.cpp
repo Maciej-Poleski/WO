@@ -4,6 +4,7 @@
 #include <random>
 #include <cassert>
 #include <queue>
+#include <algorithm>
 
 constexpr std::size_t maxN=100000;
 constexpr std::size_t maxM=1000000;
@@ -44,7 +45,7 @@ public:
     VertexRange newVertex()
     {
 	int v=n++;
-	G.push_back({});
+	G.push_back({{}});
 	assert(G.size()==n);
 	return std::make_pair(v,v);
     }
@@ -254,7 +255,15 @@ std::function<bool()> makeBernoulliDistributionGenerator(Generator& generator, d
     };
 }
 
-
+std::function<void()> buildGraphAndSerialize(std::function<void(Graph&)> builder)
+{
+    return [builder] ()
+    {
+	Graph g;
+	builder(g);
+	g.serialize();
+    };
+}
 
 template<class Generator>
 std::vector<std::function<void()>> prepareTests(Generator& engine)
@@ -281,6 +290,46 @@ std::vector<std::function<void()>> prepareTests(Generator& engine)
 		tests.push_back([&engine,vc,ec]{ generateRandomEdges(engine,vc,ec); });
 	}
 
+    std::vector<std::function<void(Graph&)>> generators={
+	[&engine] (Graph& g) {
+	    g.generatePath(engine,std::bind(&Graph::newVertex,&g),maxN);
+	},
+	[&engine] (Graph& g) {
+	    g.generateStar(engine,std::bind(&Graph::newVertex,&g),maxN);
+	},
+	[&engine] (Graph& g) {
+	    g.generateVeryWideTree(engine,std::bind(&Graph::newVertex,&g),maxN);
+	},
+	[&engine] (Graph& g) {
+	    auto sizeLeft=maxN;
+	    while(sizeLeft>0)
+	    {
+		const auto I=g.generateTree(engine,std::bind(&Graph::newVertex,&g),sizeLeft,makePoissonChildrenCountGenerator(engine,3.5),makeBernoulliDistributionGenerator(engine,0.33));
+		sizeLeft-=1+I.second.second-I.second.first;
+// 		std::cerr<<sizeLeft<<'\n';
+	    }
+	},
+	[&engine] (Graph& g) {
+	    auto sizeLeft=maxN;
+	    while(sizeLeft>0)
+	    {
+		const auto I=g.generateTree(engine,std::bind(&Graph::newVertex,&g),sizeLeft,makePoissonChildrenCountGenerator(engine,100),makeBernoulliDistributionGenerator(engine,0.1));
+		sizeLeft-=1+I.second.second-I.second.first;
+// 		std::cerr<<sizeLeft<<'\n';
+	    }
+	},
+	[&engine] (Graph& g) {
+	    auto sizeLeft=maxN;
+	    while(sizeLeft>0)
+	    {
+		const auto I=g.generateTree(engine,std::bind(&Graph::newVertex,&g),sizeLeft,makeGeometricChildrenCountGenerator(engine,0.85),makeBernoulliDistributionGenerator(engine,0.05));
+		sizeLeft-=1+I.second.second-I.second.first;
+// 		std::cerr<<sizeLeft<<'\n';
+	    }
+	},
+    };
+
+    std::transform(generators.begin(),generators.end(),std::back_inserter(tests),buildGraphAndSerialize);
 
     return tests;
 }
@@ -302,10 +351,6 @@ int main()
 {
     std::ios_base::sync_with_stdio(false);
     std::mt19937 engine(404);
-    //runTests(prepareTests(engine));
-    Graph g;
-    std::cout<<g.generateTree(engine,std::bind(&Graph::newVertex,&g), 100,makeGeometricChildrenCountGenerator(engine,0.85),makeBernoulliDistributionGenerator(engine,0.05))<<'\n';
-//     std::cout<<g.generateVeryWideTree(engine,std::bind(&Graph::newVertex,&g),30)<<'\n';
-    g.serialize();
+    runTests(prepareTests(engine));
 }
 
