@@ -1,0 +1,28 @@
+artefakty:
+gwiazda
+œcie¿ka
+bardzo szerokie drzewo (g³êbokoœci 1-2)
+drzewo (3-4 dzieci)
+szerokie drzewo (100 dzieci)
+wysokie drzewo (1+eps dzieci)
+
+
+gad¿ety:
+1/5 wierzcho³ków
+rozmiary drzew od 1 do Nmax mno¿nik 10 (+ opcja Nmax/2)
+cykl
+cykl + œcie¿ki
+cykl + œcie¿ki + krawêdzie
+
+oczekiwana liczba wierzcho³ków w jednej dwuspójnej sk³adowej:
+(Nmax - n)/n * 5 + 1
+
+oczekiwana liczba krawêdzi w jednej dwuspójnej sk³adowej:
+(Mmax - (n-1))/n * 5 
+
+
+cykl: 1/3 wierzcho³ków
+œcie¿ka: 1/3 cyklu (1/9 wierzcho³ków)
+
+test 8a: MEM - bardzo gêste dwuspójne sk³adowe (nie du¿e), prawie kliki, wiele wielokrotnych krawêdzi
+Nie czyszczono grafu - mo¿na ubiæ seri¹ testów po milion krawêdzi miêdzy dan¹ par¹ wierzcho³ków na test
