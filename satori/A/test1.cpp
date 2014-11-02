@@ -300,8 +300,10 @@ std::vector<std::function<void()>> prepareTests(Generator& engine)
         std::bind(generateEmptyGraph,vertexNumerGenerator())
     };
 
-    for(const std::size_t vc : {5ul,10ul,20ul,50ul,maxN})	// Liczba wierzchołków
-	for(const std::size_t ec :{vc, vc*2, vc*(maxM/maxN), vc*vc, vc*vc*2})	// Liczba krawędzi
+//     for(const std::size_t vc : {5ul,10ul,20ul,50ul,maxN})	// Liczba wierzchołków
+    for(const std::size_t vc : {5ul,50ul,1000ul,maxN})	// Liczba wierzchołków
+// 	for(const std::size_t ec :{vc, vc*2, vc*(maxM/maxN), vc*vc, vc*vc*2})	// Liczba krawędzi
+	for(const std::size_t ec : {10,10000,1000000})
 	{
 	    if(ec>maxM)
 		continue;
@@ -309,7 +311,8 @@ std::vector<std::function<void()>> prepareTests(Generator& engine)
 		tests.push_back([&engine,vc,ec]{ generateRandomEdges(engine,vc,ec); });
 	}
 
-    for(std::size_t n:{1,25,500,10000,100000})
+//     for(std::size_t n:{1,80,2000,100000})
+    for(std::size_t n:{80,2000,100000})
     {
 	/*
 	 * Mogą być statefull (żeby pilnować ilość stworzonych wierzchołków/krawędzi)
@@ -664,6 +667,30 @@ std::vector<std::function<void()>> prepareTests(Generator& engine)
 	    std::transform(generators.begin(),generators.end(),std::back_inserter(tests),buildGraphAndSerialize);
 	}
     }
+
+    for(int i=1;i<=32;i+=2)
+    {
+	tests.push_back([i] () {
+	    std::cout<<maxN<<' '<<maxM<<'\n';
+	    for(int j=0;j<maxM;++j)
+	    {
+		std::cout<<i<<' '<<i+1<<'\n';
+	    }
+	});
+    }
+
+    tests.push_back([] () {
+	std::cout
+	<<"3\n"
+	<<"1 1\n"
+	<<"1 1\n"
+	<<"2 2\n"
+	<<"1 1\n"
+	<<"2 2\n"
+	<<"3 2\n"
+	<<"1 1\n"
+	<<"2 2\n";
+    });
 
     return tests;
 }
