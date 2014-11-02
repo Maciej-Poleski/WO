@@ -112,6 +112,8 @@ private:
 void Graph::serialize()
 {
     assert(n==G.size());
+    assert(n<=maxN);
+    assert(m<=maxM);
     std::cout<<n<<' '<<m<<'\n';
     std::size_t edges=0;
     for(std::size_t u=0;u<n;++u)
@@ -307,7 +309,7 @@ std::vector<std::function<void()>> prepareTests(Generator& engine)
 		tests.push_back([&engine,vc,ec]{ generateRandomEdges(engine,vc,ec); });
 	}
 
-    for(std::size_t n=1;n<=maxN;n*=10)
+    for(std::size_t n:{1,25,500,10000,100000})
     {
 	/*
 	 * Mogą być statefull (żeby pilnować ilość stworzonych wierzchołków/krawędzi)
@@ -334,9 +336,14 @@ std::vector<std::function<void()>> prepareTests(Generator& engine)
 			    return g.newVertex();
 			else
 			{
-			    const std::size_t size=std::min(cycleSizeGenerator(),*verticesLeft+1);
-			    *verticesLeft-=size-1;
-			    return g.generateCycle(engine,vgen,size);
+			    for(;;)
+			    {
+				const std::size_t size=std::min(cycleSizeGenerator(),*verticesLeft+1);
+				if(size==0)
+				    continue;
+				*verticesLeft-=size-1;
+				return g.generateCycle(engine,vgen,size);
+			    }
 			}
 		    };
 		},
@@ -351,45 +358,123 @@ std::vector<std::function<void()>> prepareTests(Generator& engine)
 		    const auto vgen = singleVertexGeneratorFactory(g);
 		    const auto wantSingle=makeBernoulliDistributionGenerator(engine,0.8);
 		    return [&g,&engine,vgen,verticesAllocationGenerator,cycleSizeGenerator,pathSizeGenerator,verticesLeft,edgesLeft,wantSingle] () {
-			if(wantSingle())
+			if(wantSingle() || *edgesLeft==0)
 			    return g.newVertex();
 			else
 			{
-			    std::size_t verticesAllocation=verticesAllocationGenerator();
-			    if(*verticesLeft+1<verticesAllocation)
-				verticesAllocation=*verticesLeft+1;
-			    const auto VEmin=std::min(verticesAllocation,*edgesLeft);
-			    const std::size_t cycleSize=std::min(cycleSizeGenerator(),VEmin);
-			    *verticesLeft-=cycleSize-1;
-			    verticesAllocation-=cycleSize;
-			    *edgesLeft-=cycleSize;
-			    Graph::VertexRange wholeRange=g.generateCycle(engine,vgen,cycleSize);
-			    auto lastRange=wholeRange;
-			    while(verticesAllocation>0 && *edgesLeft>1)
+			    for(;;)
 			    {
-				const auto thisPathSize=std::min(pathSizeGenerator(),verticesAllocation);
-				if(thisPathSize==0)
+				std::size_t verticesAllocation=verticesAllocationGenerator();
+				if(*verticesLeft+1<verticesAllocation)
+				    verticesAllocation=*verticesLeft+1;
+				const auto VEmin=std::min(verticesAllocation,*edgesLeft);
+				const std::size_t cycleSize=std::min(cycleSizeGenerator(),VEmin);
+				if(cycleSize==0)
+				    continue;
+				*verticesLeft-=cycleSize-1;
+				verticesAllocation-=cycleSize;
+				*edgesLeft-=cycleSize;
+				Graph::VertexRange wholeRange=g.generateCycle(engine,vgen,cycleSize);
+				auto lastRange=wholeRange;
+				while(verticesAllocation>0 && *edgesLeft>1)
 				{
-				    // Tylko krawędź
-				    g.makeEdge(engine,lastRange,wholeRange);
-				    *edgesLeft-=1;
+				    const auto thisPathSize=std::min(pathSizeGenerator(),verticesAllocation);
+				    if(thisPathSize==0)
+				    {
+					// Tylko krawędź
+					g.makeEdge(engine,lastRange,wholeRange);
+					*edgesLeft-=1;
+				    }
+				    else
+				    {
+					std::pair<Graph::VertexRange,Graph::VertexRange> pathRange=g.generatePath(engine,vgen,thisPathSize);
+					*verticesLeft-=thisPathSize;
+					verticesAllocation-=thisPathSize;
+					assert(pathRange.first.first==pathRange.first.second);
+					assert(pathRange.second.first==pathRange.second.second);
+					g.makeEdge(engine,lastRange,pathRange.first);
+					g.makeEdge(engine,wholeRange,pathRange.second);
+					*edgesLeft-=2;
+					assert(wholeRange.second+1==pathRange.first.first);
+					wholeRange.second=pathRange.second.second;
+					lastRange=std::make_pair(pathRange.first.first,pathRange.second.second);
+				    }
 				}
-				else
-				{
-				    std::pair<Graph::VertexRange,Graph::VertexRange> pathRange=g.generatePath(engine,vgen,thisPathSize);
-				    *verticesLeft-=thisPathSize;
-				    verticesAllocation-=thisPathSize;
-				    assert(pathRange.first.first==pathRange.first.second);
-				    assert(pathRange.second.first==pathRange.second.second);
-				    g.makeEdge(engine,lastRange,pathRange.first);
-				    g.makeEdge(engine,wholeRange,pathRange.second);
-				    *edgesLeft-=2;
-				    assert(wholeRange.second+1==pathRange.first.first);
-				    wholeRange.second=pathRange.second.second;
-				    lastRange=std::make_pair(pathRange.first.first,pathRange.second.second);
-				}
+				return wholeRange;
 			    }
-			    return wholeRange;
+			}
+		    };
+		},
+		// Cykl + ścieżki + krawędzie
+		[n,&engine,singleVertexGeneratorFactory,EV,EE] (Graph& g)
+		{
+		    std::function<std::size_t()> verticesAllocationGenerator=makePoissonDistributionGenerator(engine,EV);	// Przydział wierzchołków dla tej DSS
+		    std::function<std::size_t()> edgesAllocationGenerator=makePoissonDistributionGenerator(engine,EE);	// Przydział krawędzi dla tej DSS
+		    std::function<std::size_t()> cycleSizeGenerator=makePoissonDistributionGenerator(engine,EV/3.0);
+		    std::function<std::size_t()> pathSizeGenerator=makePoissonDistributionGenerator(engine,EV/9.0);
+		    std::shared_ptr<std::size_t> verticesLeft=std::make_shared<std::size_t>(maxN-n);
+		    std::shared_ptr<std::size_t> edgesLeft=std::make_shared<std::size_t>(maxM-(n-1));
+		    const auto vgen = singleVertexGeneratorFactory(g);
+		    const auto wantSingle=makeBernoulliDistributionGenerator(engine,0.8);
+		    return [&g,&engine,vgen,verticesAllocationGenerator,edgesAllocationGenerator,cycleSizeGenerator,pathSizeGenerator,verticesLeft,edgesLeft,wantSingle] () {
+			if(wantSingle() || *edgesLeft==0)
+			    return g.newVertex();
+			else
+			{
+			    for(;;)
+			    {
+				std::size_t verticesAllocation=verticesAllocationGenerator();
+				std::size_t edgesAllocation=edgesAllocationGenerator();
+				if(*verticesLeft+1<verticesAllocation)
+				    verticesAllocation=*verticesLeft+1;
+				if(*edgesLeft<edgesAllocation)
+				    edgesAllocation=*edgesLeft;
+				const auto VEmin=std::min(verticesAllocation,edgesAllocation);
+				const std::size_t cycleSize=std::min(cycleSizeGenerator(),VEmin);
+				if(cycleSize==0)
+				    continue;
+				*verticesLeft-=cycleSize-1;
+				verticesAllocation-=cycleSize;
+				*edgesLeft-=cycleSize;
+				edgesAllocation-=cycleSize;
+				Graph::VertexRange wholeRange=g.generateCycle(engine,vgen,cycleSize);
+				auto lastRange=wholeRange;
+				while(verticesAllocation>0 && edgesAllocation>1)
+				{
+				    const auto thisPathSize=std::min(pathSizeGenerator(),std::min(verticesAllocation,edgesAllocation-1));
+				    if(thisPathSize==0)
+				    {
+					// Tylko krawędź
+					g.makeEdge(engine,lastRange,wholeRange);
+					*edgesLeft-=1;
+					edgesAllocation-=1;
+				    }
+				    else
+				    {
+					std::pair<Graph::VertexRange,Graph::VertexRange> pathRange=g.generatePath(engine,vgen,thisPathSize);
+					*verticesLeft-=thisPathSize;
+					verticesAllocation-=thisPathSize;
+					*edgesLeft-=thisPathSize-1;
+					edgesAllocation-=thisPathSize-1;
+					assert(pathRange.first.first==pathRange.first.second);
+					assert(pathRange.second.first==pathRange.second.second);
+					g.makeEdge(engine,lastRange,pathRange.first);
+					g.makeEdge(engine,wholeRange,pathRange.second);
+					*edgesLeft-=2;
+					edgesAllocation-=2;
+					assert(wholeRange.second+1==pathRange.first.first);
+					wholeRange.second=pathRange.second.second;
+					lastRange=std::make_pair(pathRange.first.first,pathRange.second.second);
+				    }
+				}
+				while(edgesAllocation>0)
+				{
+				    g.makeEdge(engine,wholeRange,wholeRange);
+				    *edgesLeft-=1;
+				    edgesAllocation-=1;
+				}
+				return wholeRange;
+			    }
 			}
 		    };
 		},
@@ -416,41 +501,117 @@ std::vector<std::function<void()>> prepareTests(Generator& engine)
 		    std::shared_ptr<std::size_t> edgesLeft=std::make_shared<std::size_t>(maxM-(n-1));
 		    const auto vgen = singleVertexGeneratorFactory(g);
 		    return [&g,&engine,vgen,cycleSizeGenerator,pathSizeGenerator,verticesLeft,edgesLeft] () {
-			std::size_t verticesAllocation=maxN;
-			if(*verticesLeft+1<verticesAllocation)
-			    verticesAllocation=*verticesLeft+1;
-			const auto VEmin=std::min(verticesAllocation,*edgesLeft);
-			const std::size_t cycleSize=std::min(cycleSizeGenerator(),VEmin);
-			*verticesLeft-=cycleSize-1;
-			verticesAllocation-=cycleSize;
-			*edgesLeft-=cycleSize;
-			Graph::VertexRange wholeRange=g.generateCycle(engine,vgen,cycleSize);
-			auto lastRange=wholeRange;
-			while(verticesAllocation>0 && *edgesLeft>1)
+			for(;;)
 			{
-			    const auto thisPathSize=std::min(pathSizeGenerator(),verticesAllocation);
-			    if(thisPathSize==0)
+			    std::size_t verticesAllocation=maxN;
+			    if(*verticesLeft+1<verticesAllocation)
+				verticesAllocation=*verticesLeft+1;
+			    const auto VEmin=std::min(verticesAllocation,*edgesLeft);
+			    const std::size_t cycleSize=std::min(cycleSizeGenerator(),VEmin);
+			    if(cycleSize==0)
+				continue;
+			    *verticesLeft-=cycleSize-1;
+			    verticesAllocation-=cycleSize;
+			    *edgesLeft-=cycleSize;
+			    Graph::VertexRange wholeRange=g.generateCycle(engine,vgen,cycleSize);
+			    auto lastRange=wholeRange;
+			    while(verticesAllocation>0 && *edgesLeft>1)
 			    {
-				// Tylko krawędź
-				g.makeEdge(engine,lastRange,wholeRange);
-				*edgesLeft-=1;
+				const auto thisPathSize=std::min(pathSizeGenerator(),std::min(verticesAllocation,*edgesLeft-1));
+				if(thisPathSize==0)
+				{
+				    // Tylko krawędź
+				    g.makeEdge(engine,lastRange,wholeRange);
+				    *edgesLeft-=1;
+				}
+				else
+				{
+				    std::pair<Graph::VertexRange,Graph::VertexRange> pathRange=g.generatePath(engine,vgen,thisPathSize);
+				    *verticesLeft-=thisPathSize;
+				    verticesAllocation-=thisPathSize;
+				    *edgesLeft-=thisPathSize-1;
+				    assert(pathRange.first.first==pathRange.first.second);
+				    assert(pathRange.second.first==pathRange.second.second);
+				    g.makeEdge(engine,lastRange,pathRange.first);
+				    g.makeEdge(engine,wholeRange,pathRange.second);
+				    *edgesLeft-=2;
+				    assert(wholeRange.second+1==pathRange.first.first);
+				    wholeRange.second=pathRange.second.second;
+				    lastRange=std::make_pair(pathRange.first.first,pathRange.second.second);
+				}
 			    }
-			    else
+			    return wholeRange;
+			}
+		    };
+		},
+		// Cykl + ścieżki + krawędzie
+		[n,&engine,singleVertexGeneratorFactory,EV,EE] (Graph& g)
+		{
+		    std::function<std::size_t()> cycleSizeGenerator=makePoissonDistributionGenerator(engine,EV/3.0);
+		    std::function<std::size_t()> pathSizeGenerator=makePoissonDistributionGenerator(engine,EV/9.0);
+		    std::shared_ptr<std::size_t> verticesLeft=std::make_shared<std::size_t>(maxN-n);
+		    std::shared_ptr<std::size_t> edgesLeft=std::make_shared<std::size_t>(maxM-(n-1));
+		    const auto vgen = singleVertexGeneratorFactory(g);
+		    return [&g,&engine,vgen,cycleSizeGenerator,pathSizeGenerator,verticesLeft,edgesLeft] () {
+			if(*edgesLeft==0)
+			    return g.newVertex();
+			else
+			{
+			    for(;;)
 			    {
-				std::pair<Graph::VertexRange,Graph::VertexRange> pathRange=g.generatePath(engine,vgen,thisPathSize);
-				*verticesLeft-=thisPathSize;
-				verticesAllocation-=thisPathSize;
-				assert(pathRange.first.first==pathRange.first.second);
-				assert(pathRange.second.first==pathRange.second.second);
-				g.makeEdge(engine,lastRange,pathRange.first);
-				g.makeEdge(engine,wholeRange,pathRange.second);
-				*edgesLeft-=2;
-				assert(wholeRange.second+1==pathRange.first.first);
-				wholeRange.second=pathRange.second.second;
-				lastRange=std::make_pair(pathRange.first.first,pathRange.second.second);
+				std::size_t verticesAllocation=maxN;
+				std::size_t edgesAllocation=maxM;
+				if(*verticesLeft+1<verticesAllocation)
+				    verticesAllocation=*verticesLeft+1;
+				if(*edgesLeft<edgesAllocation)
+				    edgesAllocation=*edgesLeft;
+				const auto VEmin=std::min(verticesAllocation,edgesAllocation);
+				const std::size_t cycleSize=std::min(cycleSizeGenerator(),VEmin);
+				if(cycleSize==0)
+				    continue;
+				*verticesLeft-=cycleSize-1;
+				verticesAllocation-=cycleSize;
+				*edgesLeft-=cycleSize;
+				edgesAllocation-=cycleSize;
+				Graph::VertexRange wholeRange=g.generateCycle(engine,vgen,cycleSize);
+				auto lastRange=wholeRange;
+				while(verticesAllocation>0 && edgesAllocation>1)
+				{
+				    const auto thisPathSize=std::min(pathSizeGenerator(),std::min(verticesAllocation,edgesAllocation-1));
+				    if(thisPathSize==0)
+				    {
+					// Tylko krawędź
+					g.makeEdge(engine,lastRange,wholeRange);
+					*edgesLeft-=1;
+					edgesAllocation-=1;
+				    }
+				    else
+				    {
+					std::pair<Graph::VertexRange,Graph::VertexRange> pathRange=g.generatePath(engine,vgen,thisPathSize);
+					*verticesLeft-=thisPathSize;
+					verticesAllocation-=thisPathSize;
+					*edgesLeft-=thisPathSize-1;
+					edgesAllocation-=thisPathSize-1;
+					assert(pathRange.first.first==pathRange.first.second);
+					assert(pathRange.second.first==pathRange.second.second);
+					g.makeEdge(engine,lastRange,pathRange.first);
+					g.makeEdge(engine,wholeRange,pathRange.second);
+					*edgesLeft-=2;
+					edgesAllocation-=2;
+					assert(wholeRange.second+1==pathRange.first.first);
+					wholeRange.second=pathRange.second.second;
+					lastRange=std::make_pair(pathRange.first.first,pathRange.second.second);
+				    }
+				}
+				while(edgesAllocation>0)
+				{
+				    g.makeEdge(engine,wholeRange,wholeRange);
+				    *edgesLeft-=1;
+				    edgesAllocation-=1;
+				}
+				return wholeRange;
 			    }
 			}
-			return wholeRange;
 		    };
 		},
 	    };

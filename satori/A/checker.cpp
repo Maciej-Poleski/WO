@@ -30,7 +30,7 @@ int main()
 	if(n>maxN)
 	    die("Przekroczono maksymalną dopuszczalną ilość wierzchołków ("+std::to_string(n)+")",4);
 	if(m>maxM)
-	    die("Przekroczono maksymalną dopuszczalną ilość krawędzi",5);
+	    die("Przekroczono maksymalną dopuszczalną ilość krawędzi ("+std::to_string(m)+")",5);
 	while(m--)
 	{
 	    long a,b;
