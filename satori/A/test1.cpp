@@ -1,3 +1,6 @@
+#ifndef DEBUG
+#define NDEBUG
+#endif
 #include <functional>
 #include <vector>
 #include <iostream>
@@ -5,6 +8,7 @@
 #include <cassert>
 #include <queue>
 #include <algorithm>
+#include <memory>
 
 constexpr std::size_t maxN=100000;
 constexpr std::size_t maxM=1000000;
@@ -53,7 +57,8 @@ public:
     void makeEdge(int u, int v)
     {
 	G[u].edges.push_back(v);
-	G[v].edges.push_back(u);
+	if(u!=v)
+	    G[v].edges.push_back(u);
 	m+=1;
     }
 
@@ -106,11 +111,23 @@ private:
 
 void Graph::serialize()
 {
+    assert(n==G.size());
     std::cout<<n<<' '<<m<<'\n';
-    for(std::size_t u=0,e=G.size();u<e;++u)
+    std::size_t edges=0;
+    for(std::size_t u=0;u<n;++u)
+    {
+	assert(u<n);
 	for(const auto v : G[u].edges)
+	{
+	    assert(v<n);
 	    if(u<=v)
+	    {
 		std::cout<<u+1<<' '<<v+1<<'\n';
+		edges+=1;
+	    }
+	}
+    }
+    assert(edges==m);
 }
 
 template<class Generator>
@@ -137,7 +154,7 @@ std::pair<Graph::VertexRange,Graph::VertexRange> Graph::generatePath(Generator& 
     std::uniform_int_distribution<int> oldVGen(oldVInterval.first,oldVInterval.second);
     for(std::size_t i=1;i<vertices;++i)
     {
-	const auto v=newVertex();
+	const auto v=vgen();
 	assert(v.first==oldVInterval.second+1);
 	std::uniform_int_distribution<int> newVGen(v.first,v.second);
 	makeEdge(oldVGen(engine),newVGen(engine));
@@ -151,7 +168,10 @@ template<class Generator>
 Graph::VertexRange Graph::generateCycle(Generator& engine, VertexGenerator vgen, std::size_t vertices)
 {
     const auto VI=generatePath(engine,vgen,vertices);
-    assert(VI.first.second<VI.second.first);
+    if(vertices>1)
+	assert(VI.first.second<VI.second.first);
+    else
+	assert(VI.first==VI.second);
     makeEdge(engine,VI.first,VI.second);
     return std::make_pair(VI.first.first,VI.second.second);
 }
@@ -226,7 +246,7 @@ Graph::generateTree(Generator& engine, const VertexGenerator vgen, const std::si
 }
 
 template<class Generator>
-std::function<std::size_t()> makePoissonChildrenCountGenerator(Generator& generator, double mean)
+std::function<std::size_t()> makePoissonDistributionGenerator(Generator& generator, double mean)
 {
     std::poisson_distribution<std::size_t> dist(mean);
     return [&generator,dist]() mutable {
@@ -235,7 +255,7 @@ std::function<std::size_t()> makePoissonChildrenCountGenerator(Generator& genera
 }
 
 template<class Generator>
-std::function<std::size_t()> makeGeometricChildrenCountGenerator(Generator& generator, double p)
+std::function<std::size_t()> makeGeometricDistributionGenerator(Generator& generator, double p)
 {
     std::geometric_distribution<std::size_t> dist(p);
     return [&generator,dist]() mutable {
@@ -289,23 +309,155 @@ std::vector<std::function<void()>> prepareTests(Generator& engine)
 
     for(std::size_t n=1;n<=maxN;n*=10)
     {
+	/*
+	 * Mogą być statefull (żeby pilnować ilość stworzonych wierzchołków/krawędzi)
+	 */
 	std::vector<std::function<Graph::VertexGenerator(Graph&)>> vertexFactories;
+
+	const auto singleVertexGeneratorFactory = [](Graph& g) {
+	    return std::bind(&Graph::newVertex,&g);
+	};
 
 	if(n!=1 && n!=maxN)
 	{
+	    const double EV = (maxN-double(n))/n*5.0+1.0;	// Najpierw rzuć monetą!
+	    const double EE = (maxM-double(n-1))/n*5.0;
 	    vertexFactories={
-
+		// Tylko cykl
+		[n,&engine,singleVertexGeneratorFactory,EV] (Graph& g) {
+		    std::function<std::size_t()> cycleSizeGenerator=makePoissonDistributionGenerator(engine,EV);
+		    std::shared_ptr<std::size_t> verticesLeft=std::make_shared<std::size_t>(maxN-n);
+		    const auto vgen = singleVertexGeneratorFactory(g);
+		    const auto wantSingle=makeBernoulliDistributionGenerator(engine,0.8);
+		    return [&g,&engine,vgen,cycleSizeGenerator,verticesLeft,wantSingle] () {
+			if(wantSingle())
+			    return g.newVertex();
+			else
+			{
+			    const std::size_t size=std::min(cycleSizeGenerator(),*verticesLeft+1);
+			    *verticesLeft-=size-1;
+			    return g.generateCycle(engine,vgen,size);
+			}
+		    };
+		},
+		// Cykl + ścieżki
+		[n,&engine,singleVertexGeneratorFactory,EV,EE] (Graph& g)
+		{
+		    std::function<std::size_t()> verticesAllocationGenerator=makePoissonDistributionGenerator(engine,EV);	// Przydział wierzchołków dla tej DSS
+		    std::function<std::size_t()> cycleSizeGenerator=makePoissonDistributionGenerator(engine,EV/3.0);
+		    std::function<std::size_t()> pathSizeGenerator=makePoissonDistributionGenerator(engine,EV/9.0);
+		    std::shared_ptr<std::size_t> verticesLeft=std::make_shared<std::size_t>(maxN-n);
+		    std::shared_ptr<std::size_t> edgesLeft=std::make_shared<std::size_t>(maxM-(n-1));
+		    const auto vgen = singleVertexGeneratorFactory(g);
+		    const auto wantSingle=makeBernoulliDistributionGenerator(engine,0.8);
+		    return [&g,&engine,vgen,verticesAllocationGenerator,cycleSizeGenerator,pathSizeGenerator,verticesLeft,edgesLeft,wantSingle] () {
+			if(wantSingle())
+			    return g.newVertex();
+			else
+			{
+			    std::size_t verticesAllocation=verticesAllocationGenerator();
+			    if(*verticesLeft+1<verticesAllocation)
+				verticesAllocation=*verticesLeft+1;
+			    const auto VEmin=std::min(verticesAllocation,*edgesLeft);
+			    const std::size_t cycleSize=std::min(cycleSizeGenerator(),VEmin);
+			    *verticesLeft-=cycleSize-1;
+			    verticesAllocation-=cycleSize;
+			    *edgesLeft-=cycleSize;
+			    Graph::VertexRange wholeRange=g.generateCycle(engine,vgen,cycleSize);
+			    auto lastRange=wholeRange;
+			    while(verticesAllocation>0 && *edgesLeft>1)
+			    {
+				const auto thisPathSize=std::min(pathSizeGenerator(),verticesAllocation);
+				if(thisPathSize==0)
+				{
+				    // Tylko krawędź
+				    g.makeEdge(engine,lastRange,wholeRange);
+				    *edgesLeft-=1;
+				}
+				else
+				{
+				    std::pair<Graph::VertexRange,Graph::VertexRange> pathRange=g.generatePath(engine,vgen,thisPathSize);
+				    *verticesLeft-=thisPathSize;
+				    verticesAllocation-=thisPathSize;
+				    assert(pathRange.first.first==pathRange.first.second);
+				    assert(pathRange.second.first==pathRange.second.second);
+				    g.makeEdge(engine,lastRange,pathRange.first);
+				    g.makeEdge(engine,wholeRange,pathRange.second);
+				    *edgesLeft-=2;
+				    assert(wholeRange.second+1==pathRange.first.first);
+				    wholeRange.second=pathRange.second.second;
+				    lastRange=std::make_pair(pathRange.first.first,pathRange.second.second);
+				}
+			    }
+			    return wholeRange;
+			}
+		    };
+		},
 	    };
 	}
 	else if(n==1)
 	{
-
+	    const double EV = (maxN-double(n))/n*5.0+1.0;	// Najpierw rzuć monetą!
+	    const double EE = (maxM-double(n-1))/n*5.0;
+	    vertexFactories={
+		// Tylko cykl długości maxN
+		[&engine,singleVertexGeneratorFactory] (Graph& g) {
+		    const auto vgen = singleVertexGeneratorFactory(g);
+		    return [&g,&engine,vgen] () {
+			return g.generateCycle(engine,vgen,maxN);
+		    };
+		},
+		// Cykl + ścieżki
+		[n,&engine,singleVertexGeneratorFactory,EV,EE] (Graph& g)
+		{
+		    std::function<std::size_t()> cycleSizeGenerator=makePoissonDistributionGenerator(engine,EV/3.0);
+		    std::function<std::size_t()> pathSizeGenerator=makePoissonDistributionGenerator(engine,EV/9.0);
+		    std::shared_ptr<std::size_t> verticesLeft=std::make_shared<std::size_t>(maxN-n);
+		    std::shared_ptr<std::size_t> edgesLeft=std::make_shared<std::size_t>(maxM-(n-1));
+		    const auto vgen = singleVertexGeneratorFactory(g);
+		    return [&g,&engine,vgen,cycleSizeGenerator,pathSizeGenerator,verticesLeft,edgesLeft] () {
+			std::size_t verticesAllocation=maxN;
+			if(*verticesLeft+1<verticesAllocation)
+			    verticesAllocation=*verticesLeft+1;
+			const auto VEmin=std::min(verticesAllocation,*edgesLeft);
+			const std::size_t cycleSize=std::min(cycleSizeGenerator(),VEmin);
+			*verticesLeft-=cycleSize-1;
+			verticesAllocation-=cycleSize;
+			*edgesLeft-=cycleSize;
+			Graph::VertexRange wholeRange=g.generateCycle(engine,vgen,cycleSize);
+			auto lastRange=wholeRange;
+			while(verticesAllocation>0 && *edgesLeft>1)
+			{
+			    const auto thisPathSize=std::min(pathSizeGenerator(),verticesAllocation);
+			    if(thisPathSize==0)
+			    {
+				// Tylko krawędź
+				g.makeEdge(engine,lastRange,wholeRange);
+				*edgesLeft-=1;
+			    }
+			    else
+			    {
+				std::pair<Graph::VertexRange,Graph::VertexRange> pathRange=g.generatePath(engine,vgen,thisPathSize);
+				*verticesLeft-=thisPathSize;
+				verticesAllocation-=thisPathSize;
+				assert(pathRange.first.first==pathRange.first.second);
+				assert(pathRange.second.first==pathRange.second.second);
+				g.makeEdge(engine,lastRange,pathRange.first);
+				g.makeEdge(engine,wholeRange,pathRange.second);
+				*edgesLeft-=2;
+				assert(wholeRange.second+1==pathRange.first.first);
+				wholeRange.second=pathRange.second.second;
+				lastRange=std::make_pair(pathRange.first.first,pathRange.second.second);
+			    }
+			}
+			return wholeRange;
+		    };
+		},
+	    };
 	}
 	else if(n==maxN)
 	{
-	    vertexFactories={ [](Graph& g) {
-		return std::bind(&Graph::newVertex,&g);
-	    }};
+	    vertexFactories={ singleVertexGeneratorFactory };
 	}
 
 	for(const auto vertexFactory : vertexFactories)
@@ -322,25 +474,28 @@ std::vector<std::function<void()>> prepareTests(Generator& engine)
 		},
 		[&engine,vertexFactory,n] (Graph& g) {
 		    auto sizeLeft=n;
+		    const auto vgen=vertexFactory(g);
 		    while(sizeLeft>0)
 		    {
-			const auto I=g.generateTree(engine,vertexFactory(g),sizeLeft,makePoissonChildrenCountGenerator(engine,3.5),makeBernoulliDistributionGenerator(engine,0.33));
+			const auto I=g.generateTree(engine,vgen,sizeLeft,makePoissonDistributionGenerator(engine,3.5),makeBernoulliDistributionGenerator(engine,0.33));
 			sizeLeft-=I;
 		    }
 		},
 		[&engine,vertexFactory,n] (Graph& g) {
 		    auto sizeLeft=n;
+		    const auto vgen=vertexFactory(g);
 		    while(sizeLeft>0)
 		    {
-			const auto I=g.generateTree(engine,vertexFactory(g),sizeLeft,makePoissonChildrenCountGenerator(engine,100),makeBernoulliDistributionGenerator(engine,0.1));
+			const auto I=g.generateTree(engine,vgen,sizeLeft,makePoissonDistributionGenerator(engine,100),makeBernoulliDistributionGenerator(engine,0.1));
 			sizeLeft-=I;
 		    }
 		},
 		[&engine,vertexFactory,n] (Graph& g) {
 		    auto sizeLeft=n;
+		    const auto vgen=vertexFactory(g);
 		    while(sizeLeft>0)
 		    {
-			const auto I=g.generateTree(engine,vertexFactory(g),sizeLeft,makeGeometricChildrenCountGenerator(engine,0.85),makeBernoulliDistributionGenerator(engine,0.05));
+			const auto I=g.generateTree(engine,vgen,sizeLeft,makeGeometricDistributionGenerator(engine,0.85),makeBernoulliDistributionGenerator(engine,0.05));
 			sizeLeft-=I;
 		    }
 		},
