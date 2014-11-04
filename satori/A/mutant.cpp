@@ -59,7 +59,7 @@ void dfs2(int u, int b = 0)
         else
             dfs2(v, b);
     }
-    if(/*par[u] > 0 && */art[u] > 0)
+    if(par[u] > 0 && art[u] > 0)
         bcc[b].push_back(u);
     par[u] = 0;
 }
