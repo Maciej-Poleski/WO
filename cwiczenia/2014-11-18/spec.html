@@ -1,0 +1,425 @@
+<p>singleSession()</p>
+<ol style="list-style-type: decimal">
+<li>screen.displayMessage(Messages.INSERT_CARD)</li>
+<li>cardReader.acceptCard(config.CARD_TIMEOUT):
+<ol style="list-style-type: lower-alpha">
+<li>acceptCard() returns normally:
+<ul>
+<li>GOTO 3</li>
+</ul></li>
+<li>TimeoutException is thrown (card was not inserted within specified time):
+<ul>
+<li>GOTO 8</li>
+</ul></li>
+<li>InvalidCardException is thrown (inserted card could not be read):
+<ul>
+<li>screen.displayMessage(Messages.INVALID_CARD)</li>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+<li>cardReader.card() (get inserted card data)</li>
+<li>checkPrinterIsFunctional()
+<ol style="list-style-type: decimal">
+<li>printer.hasPaper():
+<ol style="list-style-type: lower-alpha">
+<li>true:
+<ul>
+<li>GOTO 5</li>
+</ul></li>
+<li>false:
+<ul>
+<li>GOTO 4.2</li>
+</ul></li>
+</ol></li>
+<li>screen.displayChoice(Messages.NO_RECEIPTS, Messages.YES_NO, CHOICE_TIMEOUT) (ask whether user agrees to continue without prints)
+<ol style="list-style-type: lower-alpha">
+<li>yes:
+<ul>
+<li>GOTO 5</li>
+</ul></li>
+<li>no:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+</ol></li>
+<li>verifyPin(card)
+<ol style="list-style-type: decimal">
+<li>screen.displayMessage(Messages.PLEASE_ENTER_PIN)</li>
+<li>pinString is cleared</li>
+<li>keyPad.getKey(Config.PIN_TIMEOUT)
+<ol style="list-style-type: lower-alpha">
+<li>Key.DIGIT0 -- Key.DIGIT9:
+<ul>
+<li>digit read is added to the end of pinString</li>
+<li>GOTO 5.3</li>
+</ul></li>
+<li>Key.CORRECT:
+<ul>
+<li>GOTO 5.2</li>
+</ul></li>
+<li>Key.CANCEL (user resigned):
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+<li>Key.OK:
+<ol style="list-style-type: lower-alpha">
+<li>pinString.length() &lt; Config.PIN_MIN_LENGTH:
+<ul>
+<li>GOTO 5.3</li>
+</ul></li>
+<li>pinString.length() &gt; Config.PIN_MAX_LENGTH:
+<ul>
+<li>pinString is truncated to PIN_MAX_LENGTH</li>
+<li>GOTO 5.4</li>
+</ul></li>
+<li>otherwise (pinString.length() is within bounds):
+<ul>
+<li>GOTO 5.4</li>
+</ul></li>
+</ol></li>
+<li>TimeoutException is thrown (no key was pressed within specified time):
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+<li>card.verifyPin(pinString)
+<ol style="list-style-type: lower-alpha">
+<li>true (pinString is a correct pin):
+<ul>
+<li>GOTO 6</li>
+</ul></li>
+<li>false (pinString is not a correct pin):
+<ul>
+<li>GOTO: 5.4</li>
+</ul></li>
+</ol></li>
+<li>screen.displayMessage(Messages.INVALID_PIN)</li>
+<li>number of PIN entering attempts is incremented and checked:
+<ol style="list-style-type: lower-alpha">
+<li>number of attempts is smaller than Config.PIN_ATTEMPTS:
+<ul>
+<li>GOTO 5.1</li>
+</ul></li>
+<li>number of attempts is eaqual to Config.PIN_ATTEMPTS:
+<ul>
+<li>cardReader.holdCard()</li>
+<li>screen.displayMessage(Messages.CARD_HELD)</li>
+<li>GOTO 8</li>
+</ul></li>
+</ol></li>
+</ol></li>
+<li>mainMenu(card)
+<ol style="list-style-type: decimal">
+<li>screen.displayChoice(Messages.MAIN_MENU_QUERY, ATM.MAIN_MENU_OPTIONS, Config.CHOICE_TIMEOUT) (available options: &quot;Balance&quot;, &quot;Withdrawal&quot; and &quot;Cancel&quot;)
+<ol style="list-style-type: lower-alpha">
+<li>Messages.OPTION_GET_BALANCE:
+<ol style="list-style-type: decimal">
+<li>check if printer is not working (and the user has already agreed to operate without prints):
+<ol style="list-style-type: lower-alpha">
+<li>yes:
+<ul>
+<li>GOTO 6.1.a.3</li>
+</ul></li>
+<li>no:
+<ul>
+<li>GOTO 6.1.a.2</li>
+</ul></li>
+</ol></li>
+<li>screen.displayChoice(Messages.PRINT_QUERY, Messages.YES_NO, Config.CHOICE_TIMEOUT) (ask whether to print)
+<ol style="list-style-type: lower-alpha">
+<li>yes:
+<ul>
+<li>set print = true</li>
+<li>GOTO 6.1.a.3</li>
+</ul></li>
+<li>no:
+<ul>
+<li>set print = false</li>
+<li>GOTO 6.1.a.3</li>
+</ul></li>
+<li>TimeoutException is thrown:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+<li>balance = bankService.getBalance(accountId)
+<ol style="list-style-type: lower-alpha">
+<li>getBalance() returns normally:
+<ol style="list-style-type: decimal">
+<li>screen.displayMessage(String.format(Messages.BALANCE_FORMAT, balance))</li>
+<li>check print value
+<ol style="list-style-type: lower-alpha">
+<li>true:
+<ul>
+<li>GOTO 6.1.a.3.a.3</li>
+</ul></li>
+<li>false:
+<ul>
+<li>GOTO 6.1.a.4</li>
+</ul></li>
+</ol></li>
+<li>printer.print(String.format(Messages.BALANCE_FORMAT, balance))</li>
+<li>GOTO 6.1.a.4</li>
+</ol></li>
+<li>UnsupportedOperationException is thrown (operation not supported by bank service):
+<ul>
+<li>screen.displayMessage(Messages.BALANCE_NOT_SUPPORTED)</li>
+<li>GOTO 6.1.a.4</li>
+</ul></li>
+<li>ConnectException is thrown (failed to communicate with the bank service):
+<ol style="list-style-type: lower-alpha">
+<li>number of attempts is smaller than Config.CONNECT_ATTEMPTS:
+<ul>
+<li>GOTO 6.1.a.3</li>
+</ul></li>
+<li>number of attempts is eaqual to Config.CONNECT_ATTEMPTS:
+<ul>
+<li>screen.displayMessage(Messages.CONNECTION_ERROR)</li>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+</ol></li>
+<li>checkPrinterIsFunctional()
+<ol style="list-style-type: lower-alpha">
+<li>true:
+<ul>
+<li>GOTO 6.1.a.7</li>
+</ul></li>
+<li>false:
+<ul>
+<li>GOTO 6.1.a.5</li>
+</ul></li>
+</ol></li>
+<li>check if user has already agreed to operate without prints:
+<ol style="list-style-type: lower-alpha">
+<li>true:
+<ul>
+<li>GOTO 6.1.a.6</li>
+</ul></li>
+<li>false:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+<li>screen.displayChoice(Messages.CONTINUE_QUERY_WITHOUT_PAPER, Messages.YES_NO, Config.CHOICE_TIMEOUT)
+<ol style="list-style-type: lower-alpha">
+<li>yes:
+<ul>
+<li>GOTO 6</li>
+</ul></li>
+<li>no:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+<li>TimeoutException is thrown:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+<li>screen.displayChoice(Messages.CONTINUE_QUERY, Messages.YES_NO, Config.CHOICE_TIMEOUT)
+<ol style="list-style-type: lower-alpha">
+<li>yes:
+<ul>
+<li>GOTO 6</li>
+</ul></li>
+<li>no:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+<li>TimeoutException is thrown:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+</ol></li>
+<li>Messages.OPTION_WITHDRAW_CASH:
+<ol style="list-style-type: decimal">
+<li>check if printer is not working and user agreed to operate without prints:
+<ol style="list-style-type: lower-alpha">
+<li>yes:
+<ul>
+<li>GOTO 6.1.b.3</li>
+</ul></li>
+<li>no:
+<ul>
+<li>GOTO 6.1.b.2</li>
+</ul></li>
+</ol></li>
+<li>screen.displayChoice(Messages.PRINT_QUERY, Messages.YES_NO, Config.CHOICE_TIMEOUT) (ask whether to print):
+<ol style="list-style-type: lower-alpha">
+<li>yes:
+<ul>
+<li>set print = true</li>
+<li>GOTO 6.1.b.3</li>
+</ul></li>
+<li>no:
+<ul>
+<li>set print = false</li>
+<li>GOTO 6.1.b.3</li>
+</ul></li>
+<li>TimeoutException is thrown:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+<li>amount = screen.displayChoice(Messages.AMOUNT_QUERY, ATM.AMOUNT_QUERY_OPTIONS, Config.CHOICE_TIMEOUT)
+<ol style="list-style-type: lower-alpha">
+<li>Messages.CANCEL (user resigned):
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+<li>20, 50, 100, 200, or 300:
+<ul>
+<li>GOTO 6.1.b.4</li>
+</ul></li>
+<li>Messages.OTHER_AMOUNT:
+<ol style="list-style-type: decimal">
+<li>screen.displayMessage(Messages.CHOOSE_AMOUNT)</li>
+<li>screen.displayMessage(String.format(Messages.CURRENT_AMOUNT_FORMAT, currentAmount))</li>
+<li>keyPad.getKey(Config.CHOICE_TIMEOUT):
+<ol style="list-style-type: lower-alpha">
+<li>Key.DIGIT0 -- Key.DIGIT9:
+<ul>
+<li>digit is added to the end of the currentAmount (leading 0 is ignored)</li>
+<li>GOTO 6.1.b.3.c.3</li>
+</ul></li>
+<li>Key.CORRECT:
+<ul>
+<li>last digit is removed from currentAmount</li>
+<li>GOTO 6.1.b.3.c.3</li>
+</ul></li>
+<li>Key.CANCEL (user reigned):
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+<li>Key.OK:
+<ul>
+<li>currentAmount is returned</li>
+<li>GOTO: 6.1.b.4</li>
+</ul></li>
+<li>TimeoutException is thrown (no key was pressed within specified time):
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+</ol></li>
+<li>TimeoutException is thrown:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+<li>transaction = bankService.withdraw(accountId, amount):
+<ol style="list-style-type: lower-alpha">
+<li>TransactionRefusedException is thrown (not enough money at bank acount):
+<ol style="list-style-type: decimal">
+<li>screen.displayMessage(Messages.TRANSACTION_REFUSED)</li>
+<li>check print value:
+<ol style="list-style-type: lower-alpha">
+<li>true:
+<ul>
+<li>GOTO 6.1.b.4.a.3</li>
+</ul></li>
+<li>false:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+<li>printer.print(Messages.TRANSACTION_REFUSED)</li>
+<li>GOTO 7</li>
+</ol></li>
+<li>ConnectException is thrown:
+<ol style="list-style-type: lower-alpha">
+<li>number of attempts is smaller than Config.CONNECT_ATTEMPTS:
+<ul>
+<li>GOTO 6.1.b.4</li>
+</ul></li>
+<li>number of attempts is eaqual to Config.CONNECT_ATTEMPTS:
+<ul>
+<li>screen.displayMessage(Messages.CONNECTION_ERROR)</li>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+<li>withdraw() returns transaction:
+<ul>
+<li>GOTO 6.1.b.5</li>
+</ul></li>
+</ol></li>
+<li>banknotesCollection = dispenser.prepareBanknotes(amount):
+<ol style="list-style-type: lower-alpha">
+<li>NotEnoughMoneyException is thrown:
+<ul>
+<li>transaction.rollback()</li>
+<li>screen.displayMessage(Messages.outOfCash)</li>
+<li>GOTO 7</li>
+</ul></li>
+<li>prepareBanknotes() returns normally:
+<ul>
+<li>GOTO 6.1.b.6</li>
+</ul></li>
+</ol></li>
+<li>cardReader.ejectCard(Config.EJECT_TIMEOUT):
+<ol style="list-style-type: lower-alpha">
+<li>ejectCard() returns normally:
+<ul>
+<li>GOTO 6.1.b.7</li>
+</ul></li>
+<li>TimeoutException is thrown (card was not taken within specified time):
+<ul>
+<li>transaction.rollback()</li>
+<li>cardReader.holdCard() (card is blocked by the machine)</li>
+<li>screen.displayMessage(Messages.CARD_HELD)</li>
+<li>GOTO 8</li>
+</ul></li>
+</ol></li>
+<li>dispenser.dispense(banknotesCollection):
+<ol style="list-style-type: lower-alpha">
+<li>dispense() returns normally:
+<ul>
+<li>GOTO 6.1.b.8</li>
+</ul></li>
+<li>TimeoutException is thrown (money not taken):
+<ul>
+<li>transaction.rollback()</li>
+<li>GOTO 8</li>
+</ul></li>
+</ol></li>
+<li>transaction.commit()</li>
+<li>check print value:
+<ol style="list-style-type: lower-alpha">
+<li>true:
+<ul>
+<li>GOTO 6.1.b.10</li>
+</ul></li>
+<li>false:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+<li>printer.print(String.format(Messages.RECEIPT_FORMAT, amount))</li>
+</ol></li>
+<li>Messages.OPTION_RETURN_CARD:
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+<li>TimeoutException is thrown (no action was chosen within specified time):
+<ul>
+<li>GOTO 7</li>
+</ul></li>
+</ol></li>
+</ol></li>
+<li>cardReader.ejectCard(config.EJECT_TIMEOUT):
+<ol style="list-style-type: lower-alpha">
+<li>ejectCard() returns normally:
+<ul>
+<li>GOTO 8</li>
+</ul></li>
+<li>TimeoutException is thrown (card was not taken within specified time):
+<ul>
+<li>cardReader.holdCard()</li>
+<li>screen.displayMessage(Messages.CARD_HELD)</li>
+<li>GOTO 8</li>
+</ul></li>
+</ol></li>
+<li>RETURN</li>
+</ol>
