@@ -1,15 +1,14 @@
 package atm;
 
 
-import java.util.Map;
-
 interface IRecordProvider {
-    IMocksRecord getMocksRecord(Map<String, Object> branchingState);
+    IMocksRecord getMocksRecord(DecisionState branchingState);
 
     /**
      * Musi być wywołane przed {@code getMocksRecord}
+     *
      * @param branchingState
      * @return
      */
-    String nextChunk(Map<String, Object> branchingState);
+    String nextChunk(DecisionState branchingState);
 }
