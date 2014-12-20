@@ -1,0 +1,96 @@
+package heap;
+
+import java.util.ArrayList;
+
+public class Heap
+{
+    //@ private invariant data != null;
+    //@ private invariant data.size()>0;
+    //@ private invariant data.get(0) == null;
+    //@ private invariant (\num_of int i;i>1 && i<data.size();data.get(i)<data.get(i/2))<=1;
+
+    //@ ensures data.size() == 1;
+    public Heap();
+
+    /*@ requires index/2>0;
+      @ requires index<data.size();
+      @ ensures \old(data.get(index)) == (int) data.get(index/2);
+      @ ensures (int) data.get(index) == \old(data.get(index/2));
+     */
+    private /*@ helper */ void swapWithParent(int index);
+
+    /*@ requires index/2>0;
+      @ requires index<data.size();
+      @ requires data.get(index/2)<=data.get(index);
+      @ ensures data.get(index/2)<=data.get(index);
+      @ ensures \result == false;
+      @ also
+      @ requires index/2>0;
+      @ requires index<data.size();
+      @ requires data.get(index/2)>data.get(index);
+      @ ensures data.get(index/2)<=data.get(index);
+      @ ensures \result == true;
+     */
+    private /*@ helper */ boolean correctAt(int index);
+
+    /*@ requires index>0;
+      @ requires index<data.size();
+      @ ensures ((\num_of int i;i>1 && i<data.size();data.get(i)<data.get(i/2))==0);
+     */
+    private void correctUpFrom(int index);
+
+    /*@ requires index>0;
+      @ requires index<data.size();
+      @ ensures ((\num_of int i;i>1 && i<data.size();data.get(i)<data.get(i/2))==0);
+     */
+    private /*@ helper */ void correctDownFrom(int index);
+
+    /*@
+      @ ensures \result == data.size() - 1;
+     */
+    public /*@ pure @*/ int size();
+
+    /*@
+      @ ensures \result == (size() == 0);
+     */
+    public /*@ pure @*/ boolean isEmpty();
+
+    /*@
+      @ ensures ((\num_of int i;i>1 && i<data.size();data.get(i)<data.get(i/2))==0);
+      @ ensures (\exists int i; i>0 && i<data.size(); data.get(i) == value);
+      @ ensures size() == \old(size()) + 1;
+     */
+    public void insert(int value);
+
+    /*@
+      @ requires !isEmpty();
+      @ ensures \old(data.get(1)) == \result;
+      @ ensures (\forall int i; i>0 && i<data.size(); \result <= data.get(i));
+      @ also
+      @ requires isEmpty();
+      @ ensures false;
+      @ signals (IndexOutOfBoundsException e) data.size() == 1;
+    */
+    public int getMin() throws IndexOutOfBoundsException;
+
+    /*@
+      @ requires !isEmpty();
+      @ ensures \old(data.get(1)) == \result;
+      @ ensures (\forall int i; i>0 && i<data.size(); \result <= data.get(i));
+      @ ensures size() == \old(size()) - 1;
+      @ also
+      @ requires isEmpty();
+      @ ensures false;
+      @ signals (IndexOutOfBoundsException e) data.size() == 1;
+    */
+    public int extractMin() throws IndexOutOfBoundsException;
+
+    /*@
+      @ ensures isEmpty() || getMin()>=limit;
+      @ ensures \old(size()) == size() + (\result).length;
+      @ ensures \result != null;
+      @ ensures (\forall int i; i>=0 && i<(\result).length; (\result)[i]<limit);
+      @ ensures (\forall int i; i>0 && i<(\result).length; (\result)[i-1]<=(\result)[i]);
+     */
+    public int[] extractUntil(int limit);
+}
